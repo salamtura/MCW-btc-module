@@ -1,0 +1,24 @@
+infura:
+  accessToken: INFURA_ACCESS_TOKEN
+  isTestnet: true
+blockcypher:
+  accessToken: BLOCKCYPHER_ACCESS_TOKEN
+  isTestnet: true
+blocktrail:
+  apiKey: BLOCKTRAIL_API_KEY
+  isTestnet: true
+crowdsale:
+   address: CROWDSALE_ADDRESS
+   ownerAddress: CROWDSALE_OWNER_ADDRESS
+   ownerPrivateKey: CROWDSALE_OWNER_PRIVATE_KEY
+postgres:
+  host: POSTGRES_HOST
+  user: POSTGRES_USER
+  password: POSTGRES_USER_PASSWORD
+  dbname: DATABASE_NAME
+bitcoin:
+  xPub: FOUNDER_XPUB_KEY
+daemon:
+  enabled: false
+  pidfile: PID_FILE_NAME
+  logfile: LOG_FILE_NAME
