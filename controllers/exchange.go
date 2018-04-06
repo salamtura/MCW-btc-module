@@ -3,6 +3,7 @@ package controllers
 import (
 	"encoding/json"
 	"math"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -34,7 +35,7 @@ func MakeExchangeController(
 		return nil, err
 	}
 
-	latestTransaction := model.Transaction{}
+	latestTransaction := model.BTCTransaction{}
 
 	database.Order("index desc").First(&latestTransaction)
 
@@ -84,7 +85,7 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 		return
 	}
 
-	transaction := &model.Transaction{
+	transaction := &model.BTCTransaction{
 		EthereumAddress: ethereumAddress.String(),
 		BitcoinAddress:  address,
 		Index:           index,
@@ -92,7 +93,7 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 	}
 
 	err = controller.database.Create(transaction).Error
-
+	fmt.Println(err)
 	bitcoinAddressChannel <- address
 	errorChannel <- err
 

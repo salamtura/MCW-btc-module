@@ -1,6 +1,6 @@
 package model
 
-type Transaction struct {
+type BTCTransaction struct {
 	ID                uint    `gorm:"primary_key" json:"id"`
 	EthereumAddress   string  `json:"ethereumAddress"`
 	BitcoinAddress    string  `json:"bitcoinAddress"`

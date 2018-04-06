@@ -49,7 +49,7 @@ func main() {
 	database, err := gorm.Open(
 		"postgres",
 		fmt.Sprintf(
-			"host=%s user=%s dbname=%s password=%s",
+			"host=%s user=%s dbname=%s password=%s sslmode=disable",
 			config.GetString("postgres.host"),
 			config.GetString("postgres.user"),
 			config.GetString("postgres.dbname"),
@@ -62,7 +62,7 @@ func main() {
 	}
 
 	fmt.Println("BEGIN MIGRATIONS")
-	database.AutoMigrate(model.Transaction{})
+	database.AutoMigrate(&model.BTCTransaction{})
 	fmt.Println("END MIGRATIONS")
 
 	server, err := server.New(database)

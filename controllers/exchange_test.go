@@ -16,8 +16,8 @@ import (
 func TestMakeExchangeController(t *testing.T) {
 	db, err := gorm.Open("sqlite3", "test.db")
 
-	db.DropTableIfExists(model.Transaction{})
-	db.AutoMigrate(model.Transaction{})
+	db.DropTableIfExists(model.BTCTransaction{})
+	db.AutoMigrate(model.BTCTransaction{})
 
 	assert.NoError(t, err)
 
