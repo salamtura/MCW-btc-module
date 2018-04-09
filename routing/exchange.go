@@ -57,6 +57,9 @@ func (router ExchangeRouter) buyTokens(context echo.Context) error {
 		}
 	}
 
-	return context.String(http.StatusOK, transaction.BitcoinAddress)
+	return context.JSON(http.StatusOK, map[string]interface{}{
+		"address": transaction.BitcoinAddress,
+		"isNew": isNew,
+	})
 }
 
