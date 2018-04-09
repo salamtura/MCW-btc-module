@@ -65,7 +65,9 @@ func New(database *gorm.DB) (*Server, error) {
 		return nil, err
 	}
 
-	exchangeRouter := routing.MakeExchangeRouter(exchangeController)
+	whitelistController, err := controllers.MakeWhitelistController(infuraController, config.GetString("crowdsale.address"))
+
+	exchangeRouter := routing.MakeExchangeRouter(exchangeController, whitelistController)
 
 	exchangeRouter.Register(mainGroup)
 

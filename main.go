@@ -1,4 +1,5 @@
-//go:generate abigen --sol ./contracts/Flattened.sol --pkg gocontracts  --out ./gocontracts/contracts.go
+//go:generate abigen --sol ./contracts/MocrowCoinCrowdsale.sol --pkg gocontracts  --out ./gocontracts/contracts.go
+
 package main
 
 import (

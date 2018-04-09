@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"testing"
 
-	"MCW-btc-module/model"
+	"decom-btc-module/model"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/jarcoal/httpmock.v1"
+	"strings"
 )
 
 func TestMakeExchangeController(t *testing.T) {
@@ -97,6 +97,7 @@ func TestExchangeController_BuyTokens(t *testing.T) {
 	)
 
 	if assert.NoError(t, err) {
+		httpmock.Activate()
 		defer httpmock.DeactivateAndReset()
 
 		httpmock.RegisterResponder(
@@ -118,20 +119,44 @@ func TestExchangeController_BuyTokens(t *testing.T) {
 
 				return httpmock.NewStringResponse(
 					http.StatusOK,
-					`{"jsonrpc": "2.0", "result": "0xabc"}`,
+					`{"jsonrpc": "2.0", "result": "0x1"}`,
 				), nil
 
 			},
 		)
-		btcAddressChan := make(chan string)
-		errChan := make(chan error)
 
-		go controller.BuyTokens(common.Address{}, btcAddressChan, errChan)
-		address := <-btcAddressChan
-		err := <-errChan
+		transaction, isNew, err := controller.CreateTransactionEntry("")
 
-		assert.NoError(t, err)
-		assert.NotEmpty(t, address)
+		httpmock.RegisterResponder(http.MethodGet,
+			strings.Replace(controller.endpoint, "%address%", transaction.BitcoinAddress, 1),
+			func(request *http.Request) (*http.Response, error) {
+				return httpmock.NewJsonResponse(
+					http.StatusOK,
+					map[string]interface{}{
+						"data": []map[string]interface{}{
+							{
+								"hash":          "902912aeafe06a03ca95c70cad2e709c89e9b4f4a99aa6a0ae386408ae131b0f",
+								"time":          "2014-09-05T17:08:04+0000",
+								"confirmations": 279,
+								"is_coinbase":   false,
+								"value":         15000,
+								"index":         0,
+								"address":       "1NcXPMRaanz43b1kokpPuYDdk6GGDvxT2T",
+								"type":          "pubkeyhash",
+								"script":        "DUP HASH160 0x14 0xed12908714ffd43142bf9832692017e8ad54e9a8 EQUALVERIFY CHECKSIG",
+								"script_hex":    "76a914ed12908714ffd43142bf9832692017e8ad54e9a888ac",
+							}},
+						"current_page": 1,
+						"per_page":     20,
+						"total":        4,
+					})
+			},
+		)
 
+		if assert.NoError(t, err) {
+			assert.True(t, isNew)
+			controller.BuyTokens(transaction)
+
+		}
 	}
 }

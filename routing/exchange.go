@@ -1,6 +1,8 @@
 package routing
 
 import (
+	"errors"
+
 	"MCW-btc-module/controllers"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -11,11 +13,13 @@ import (
 
 type ExchangeRouter struct {
 	*controllers.ExchangeController
+	*controllers.WhitelistController
 }
 
-func MakeExchangeRouter(controller *controllers.ExchangeController) ExchangeRouter {
+func MakeExchangeRouter(exchangeController *controllers.ExchangeController, whitelistController *controllers.WhitelistController) ExchangeRouter {
 	return ExchangeRouter{
-		ExchangeController: controller,
+		ExchangeController:  exchangeController,
+		WhitelistController: whitelistController,
 	}
 }
 
@@ -24,17 +28,35 @@ func (router ExchangeRouter) Register(group *echo.Group) {
 }
 
 func (router ExchangeRouter) buyTokens(context echo.Context) error {
-	btcAddressChan := make(chan string)
-	errChan := make(chan error)
+	address := common.HexToAddress(context.Param("address"))
 
-	go router.ExchangeController.BuyTokens(common.HexToAddress(context.Param("address")), btcAddressChan, errChan)
+	if address == common.HexToAddress("") {
+		return errors.New("invalid address")
+	}
 
-	address := <-btcAddressChan
-	err := <-errChan
+	whitelisted, err := router.IsWhitelisted(address)
 
 	if err != nil {
 		return err
 	}
 
-	return context.String(http.StatusOK, address)
+	if !whitelisted {
+		return errors.New("address is not whitelisted")
+	}
+
+	transaction, isNew, err := router.ExchangeController.CreateTransactionEntry(address.String())
+	if err != nil {
+		return err
+	}
+
+	if isNew {
+		go router.ExchangeController.BuyTokens(transaction)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return context.String(http.StatusOK, transaction.BitcoinAddress)
 }
+

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"log"
 	"math"
 	"math/big"
 	"sync"
@@ -69,7 +70,15 @@ func (controller ExchangeController) getExchangeRate() (float64, error) {
 	return value, nil
 }
 
-func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, bitcoinAddressChannel chan<- string, errorChannel chan<- error) {
+func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress string) (*model.Transaction, bool, error) {
+	transaction := new(model.Transaction)
+
+	err := controller.database.Where("ethereum_address = ?", ethereumAddress).Order("id desc", false).First(transaction).Error
+
+	if err == nil && transaction.Status == model.TRANSACTON_STATUS_NEW && transaction.BitcoinAddress != "" {
+		return transaction, false, nil
+	}
+
 	controller.indexMutex.Lock()
 	index := controller.currentChildIndex
 	index += 1
@@ -79,13 +88,11 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 	controller.indexMutex.Unlock()
 
 	if err != nil {
-		bitcoinAddressChannel <- address
-		errorChannel <- err
-		return
+		return nil, false, err
 	}
 
-	transaction := &model.Transaction{
-		EthereumAddress: ethereumAddress.String(),
+	transaction = &model.Transaction{
+		EthereumAddress: ethereumAddress,
 		BitcoinAddress:  address,
 		Index:           index,
 		Status:          model.TRANSACTON_STATUS_NEW,
@@ -93,13 +100,10 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 
 	err = controller.database.Create(transaction).Error
 
-	bitcoinAddressChannel <- address
-	errorChannel <- err
+	return transaction, true, err
+}
 
-	if err != nil {
-		return
-	}
-
+func (controller *ExchangeController) BuyTokens(transaction *model.Transaction) {
 	rate, err := controller.getExchangeRate()
 
 	if err != nil {
@@ -109,7 +113,7 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 		return
 	}
 
-	receivedBTC, err := controller.MonitoringController.waitForTransfer(address)
+	receivedBTC, err := controller.MonitoringController.waitForTransfer(transaction.BitcoinAddress)
 
 	if err != nil {
 		transaction.Error = err.Error()
@@ -123,37 +127,35 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 
 	receivedEth := receivedBTC * rate
 
-	//exchangeRate, err := controller.TokenManagementController.GetTokenExchangeRate()
-	//
-	//if err != nil {
-	//	transaction.Error = err.Error()
-	//	transaction.Status = model.TRANSACTION_STATUS_ERROR
-	//	controller.database.Save(transaction)
-	//	return
-	//}
+	exchangeRate, err := controller.TokenManagementController.GetTokenExchangeRate()
+
+	if err != nil {
+		transaction.Error = err.Error()
+		transaction.Status = model.TRANSACTION_STATUS_ERROR
+		controller.database.Save(transaction)
+		return
+	}
 
 	bigWei := big.NewFloat(0).Mul(big.NewFloat(receivedEth), big.NewFloat(math.Pow(10, 18)))
 
-	//tokensAmount, _ := big.NewFloat(0).Mul(bigWei, exchangeRate).Int(nil)
-	//
-	//tokensLeft, err := controller.TokenManagementController.GetTokensLeft()
-	//
-	//if err != nil {
-	//	transaction.Error = err.Error()
-	//	transaction.Status = model.TRANSACTION_STATUS_ERROR
-	//	controller.database.Save(transaction)
-	//	return
-	//}
-	//
-	//tokensToTransfer := tokensAmount
-	//
-	//if tokensAmount.Cmp(tokensLeft) == 1 {
-	//	tokensToTransfer = tokensLeft
-	//}
+	tokensAmount, _ := big.NewFloat(0).Mul(bigWei, exchangeRate).Int(nil)
 
-	bigIntWei, _ := bigWei.Int(nil)
+	tokensLeft, err := controller.TokenManagementController.GetTokensLeft()
 
-	if err := controller.TokenManagementController.MintTokens(ethereumAddress, bigIntWei); err != nil {
+	if err != nil {
+		transaction.Error = err.Error()
+		transaction.Status = model.TRANSACTION_STATUS_ERROR
+		controller.database.Save(transaction)
+		return
+	}
+
+	tokensToTransfer := tokensAmount
+
+	if tokensAmount.Cmp(tokensLeft) == 1 {
+		tokensToTransfer = tokensLeft
+	}
+
+	if err := controller.TokenManagementController.MintTokens(common.HexToAddress(transaction.EthereumAddress), tokensToTransfer); err != nil {
 		transaction.Error = err.Error()
 		transaction.Status = model.TRANSACTION_STATUS_ERROR
 		controller.database.Save(transaction)
@@ -162,4 +164,16 @@ func (controller *ExchangeController) BuyTokens(ethereumAddress common.Address, 
 
 	transaction.Status = model.TRANSACTION_STATUS_SUCCESS
 	controller.database.Save(transaction)
+}
+
+func (controller ExchangeController) ResumeMonitoring() {
+	unfinishedTransactions := new([]model.Transaction)
+
+	if err := controller.database.Where("status = ?", model.TRANSACTON_STATUS_NEW).Find(unfinishedTransactions).Error; err != nil {
+		log.Println(err)
+	}
+
+	for _, transaction := range *unfinishedTransactions {
+		go controller.BuyTokens(&transaction)
+	}
 }
