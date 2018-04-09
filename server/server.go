@@ -19,6 +19,14 @@ func New(database *gorm.DB) (*Server, error) {
 	server := Server{echo.New()}
 
 	// Middleware
+	server.HTTPErrorHandler = func(err error, context echo.Context) {
+		context.JSON(200, map[string]interface{}{
+			"error": map[string]interface{}{
+				"code":    500,
+				"message": err.Error(),
+			},
+		})
+	}
 	server.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
 	//server.Pre(middleware.HTTPSRedirect())
 	server.Pre(middleware.RemoveTrailingSlash())
