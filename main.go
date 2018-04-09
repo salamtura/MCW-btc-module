@@ -18,7 +18,7 @@ func main() {
 	fmt.Println("GET CONFIG")
 
 	config.AddConfigPath(".")
-	config.SetConfigName("config 2")
+	config.SetConfigName("config")
 
 	if err := config.ReadInConfig(); err != nil {
 		panic(fmt.Errorf("Fatal error getting config from file: %s \n", err))
@@ -63,7 +63,7 @@ func main() {
 	}
 
 	fmt.Println("BEGIN MIGRATIONS")
-	database.AutoMigrate(model.Transaction{})
+	database.AutoMigrate(&model.BTCTransaction{})
 	fmt.Println("END MIGRATIONS")
 
 	server, err := server.New(database)

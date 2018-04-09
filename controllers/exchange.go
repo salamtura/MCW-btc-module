@@ -35,7 +35,7 @@ func MakeExchangeController(
 		return nil, err
 	}
 
-	latestTransaction := model.Transaction{}
+	latestTransaction := model.BTCTransaction{}
 
 	database.Order("index desc").First(&latestTransaction)
 
@@ -70,8 +70,8 @@ func (controller ExchangeController) getExchangeRate() (float64, error) {
 	return value, nil
 }
 
-func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress string) (*model.Transaction, bool, error) {
-	transaction := new(model.Transaction)
+func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress string) (*model.BTCTransaction, bool, error) {
+	transaction := new(model.BTCTransaction)
 
 	err := controller.database.Where("ethereum_address = ?", ethereumAddress).Order("id desc", false).First(transaction).Error
 
@@ -91,7 +91,7 @@ func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress str
 		return nil, false, err
 	}
 
-	transaction = &model.Transaction{
+	transaction = &model.BTCTransaction{
 		EthereumAddress: ethereumAddress,
 		BitcoinAddress:  address,
 		Index:           index,
@@ -103,7 +103,7 @@ func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress str
 	return transaction, true, err
 }
 
-func (controller *ExchangeController) BuyTokens(transaction *model.Transaction) {
+func (controller *ExchangeController) BuyTokens(transaction *model.BTCTransaction) {
 	rate, err := controller.getExchangeRate()
 
 	if err != nil {
@@ -167,7 +167,7 @@ func (controller *ExchangeController) BuyTokens(transaction *model.Transaction) 
 }
 
 func (controller ExchangeController) ResumeMonitoring() {
-	unfinishedTransactions := new([]model.Transaction)
+	unfinishedTransactions := new([]model.BTCTransaction)
 
 	if err := controller.database.Where("status = ?", model.TRANSACTON_STATUS_NEW).Find(unfinishedTransactions).Error; err != nil {
 		log.Println(err)

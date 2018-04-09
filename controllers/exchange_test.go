@@ -2,22 +2,22 @@ package controllers
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
-	"decom-btc-module/model"
+	"MCW-btc-module/model"
 
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/jarcoal/httpmock.v1"
-	"strings"
 )
 
 func TestMakeExchangeController(t *testing.T) {
 	db, err := gorm.Open("sqlite3", "test.db")
 
-	db.DropTableIfExists(model.Transaction{})
-	db.AutoMigrate(model.Transaction{})
+	db.DropTableIfExists(model.BTCTransaction{})
+	db.AutoMigrate(model.BTCTransaction{})
 
 	assert.NoError(t, err)
 
