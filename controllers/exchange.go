@@ -20,6 +20,7 @@ type ExchangeController struct {
 	TokenManagementController
 	database          *gorm.DB
 	xpub              *hdkeychain.ExtendedKey
+	isTestnet         bool
 	currentChildIndex uint32
 	indexMutex        *sync.Mutex
 }
@@ -29,6 +30,7 @@ func MakeExchangeController(
 	tokenManagementController TokenManagementController,
 	database *gorm.DB,
 	xpubString string,
+	isTestnet bool,
 ) (*ExchangeController, error) {
 	xpub, err := hdkeychain.NewKeyFromString(xpubString)
 	if err != nil {
@@ -44,6 +46,7 @@ func MakeExchangeController(
 		TokenManagementController: tokenManagementController,
 		database:                  database,
 		xpub:                      xpub,
+		isTestnet:                 isTestnet,
 		currentChildIndex:         latestTransaction.Index,
 		indexMutex:                &sync.Mutex{},
 	}, nil
@@ -83,7 +86,7 @@ func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress str
 	index := controller.currentChildIndex
 	index += 1
 
-	address, err := helpers.DeriveAddress(controller.xpub, index)
+	address, err := helpers.DeriveAddress(controller.xpub, index, controller.isTestnet)
 	controller.currentChildIndex = index
 	controller.indexMutex.Unlock()
 

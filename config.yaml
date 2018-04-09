@@ -18,6 +18,7 @@ postgres:
   dbname: DATABASE_NAME
 bitcoin:
   xPub: FOUNDER_XPUB_KEY
+  isTestnet: true
 daemon:
   enabled: false
   pidfile: PID_FILE_NAME

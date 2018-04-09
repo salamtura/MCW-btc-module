@@ -67,7 +67,13 @@ func New(database *gorm.DB) (*Server, error) {
 		return nil, err
 	}
 
-	exchangeController, err := controllers.MakeExchangeController(monitoringController, *tokenManagementController, database, config.GetString("bitcoin.xPub"))
+	exchangeController, err := controllers.MakeExchangeController(
+		monitoringController,
+		*tokenManagementController,
+		database,
+		config.GetString("bitcoin.xPub"),
+		config.GetBool("bitcoin.isTestnet"),
+	)
 
 	if err != nil {
 		return nil, err
