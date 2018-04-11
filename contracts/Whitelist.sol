@@ -1,6 +1,6 @@
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.19;
 
-import './zeppelin-solidity/contracts/ownership/Ownable.sol';
+import "./zeppelin-solidity/contracts/ownership/Ownable.sol";
 
 
 /**
@@ -12,16 +12,12 @@ contract Whitelist is Ownable {
 
     uint256 public whitelistLength = 0;
 
-    function Whitelist() {
-        owner = msg.sender;
-    }
-
     /**
     * @dev Add wallet to whitelist.
     * @dev Accept request from the owner only.
     * @param _wallet The address of wallet to add.
     */
-    function addWallet(address _wallet) onlyOwner public {
+    function addWallet(address _wallet) public onlyOwner {
         require(_wallet != address(0));
         require(!isWhitelisted(_wallet));
         whitelist[_wallet] = true;
@@ -33,7 +29,7 @@ contract Whitelist is Ownable {
     * @dev Accept request from the owner only.
     * @param _wallet The address of whitelisted wallet to remove.
     */  
-    function removeWallet(address _wallet) onlyOwner public {
+    function removeWallet(address _wallet) public onlyOwner {
         require(_wallet != address(0));
         require(isWhitelisted(_wallet));
         whitelist[_wallet] = false;
@@ -44,7 +40,7 @@ contract Whitelist is Ownable {
     * @dev Check the specified wallet whether it is in the whitelist.
     * @param _wallet The address of wallet to check.
     */
-    function isWhitelisted(address _wallet) constant public returns (bool) {
+    function isWhitelisted(address _wallet) public view returns (bool) {
         return whitelist[_wallet];
     }
 }

@@ -1,6 +1,6 @@
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.19;
 
-import './zeppelin-solidity/contracts/lifecycle/Pausable.sol';
+import "./zeppelin-solidity/contracts/lifecycle/Pausable.sol";
 
 import "./MocrowCoin.sol";
 import "./Whitelistable.sol";
@@ -60,21 +60,28 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     uint256 public preIcoTokenRate = TOKEN_RATE_PRE_ICO;
     uint256 public lastDayChangePreIcoTokenRate = 0;
     uint256 public tokensRemainingPreIco = HARDCAP_TOKENS_PRE_ICO;
+    uint256 public tokensSoldPreIco = 0;
+    uint256 public weiRaisedPreIco = 0;
 
     uint256 public icoTokenRateNegativeDecimals = 8;
     uint256 public icoTokenRate = TOKEN_RATE_ICO;
     uint256 public lastDayChangeIcoTokenRate = 0;
     uint256 public tokensRemainingIco = HARDCAP_TOKENS_PRE_ICO + HARDCAP_TOKENS_ICO;
+    uint256 public tokensSoldIco = 0;
+    uint256 public weiRaisedIco = 0;
+
+    uint256 public tokensSoldTotal = 0;
+    uint256 public weiRaisedTotal = 0;
 
     uint256 public compaignAllocationAndBonusRemainingTokens = COMPAIGN_ALLOCATION_AND_BONUSES_TOKENS;
 
     MocrowCoin public token;
 
-    function isPreIco() constant public returns(bool) {
+    function isPreIco() public view returns(bool) {
         return startTimePreIco < now && now < endTimePreIco;
     }
 
-    function isIco() constant public returns(bool) {
+    function isIco() public view returns(bool) {
         return startTimeIco < now && now < endTimeIco;
     }
 
@@ -104,7 +111,7 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     }
 
     modifier minimalInvestment(uint256 _weiAmount) {
-        require(_weiAmount > MINIMAL_INVESTMENT);
+        require(_weiAmount >= MINIMAL_INVESTMENT);
         _;
     }
 
@@ -152,6 +159,9 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
         withdrawalWallet3 = _withdrawalWallet3;
         withdrawalWallet4 = _withdrawalWallet4;
 
+        lastDayChangePreIcoTokenRate = now;
+        lastDayChangeIcoTokenRate = now;
+
         token = new MocrowCoin(_addressForFounders, _addressForBountyProgram, _addressForPlatformOperations);
         token.pause();
 
@@ -160,12 +170,25 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     }
 
     /**
+    * @dev Fallback function can be used to buy tokens.
+    */
+    function() public payable {
+        if (isPreIco()) {
+            sellTokensPreIco();
+        } else if (isIco()) {
+            sellTokensIco();
+        } else {
+            revert();
+        }
+    }
+
+    /**
     * @dev Change pre-ICO start time.
     * @dev Only administrator or owner can change pre-ICO start time and only before pre-ICO period.
     * @dev The end time must be less than start time of ICO.
     * @param _startTimePreIco The start time which must be more than now time.
     */
-    function changePreIcoStartTime(uint256 _startTimePreIco) onlyAdministratorOrOwner beforePreIcoSalePeriod public {
+    function changePreIcoStartTime(uint256 _startTimePreIco) public onlyAdministratorOrOwner beforePreIcoSalePeriod {
         require(now < _startTimePreIco);
         uint256 _endTimePreIco = _startTimePreIco + (preIcoDurationDays * 1 days);
         require(_endTimePreIco < startTimeIco);
@@ -180,11 +203,14 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     * @dev The end time must be less than start time of ICO.
     * @param _startTimeIco The start time which must be more than end time of the pre-ICO and more than now time.
     */
-    function changeIcoStartTime(uint256 _startTimeIco) onlyAdministratorOrOwner beforeIcoSalePeriod public {
+    function changeIcoStartTime(uint256 _startTimeIco) public onlyAdministratorOrOwner beforeIcoSalePeriod {
         require(_startTimeIco > now && _startTimeIco > endTimePreIco);
 
         startTimeIco = _startTimeIco;
         endTimeIco = startTimeIco + (icoDurationDays * 1 days);
+
+        icoTenPercentBonusEnded = startTimeIco + (2 days);
+        icoFivePercentBonusEnded = icoTenPercentBonusEnded + (3 days);
     }
 
     /**
@@ -193,13 +219,12 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     * @param _preIcoTokenRate Pre-ICO rate of the token.
     * @param _negativeDecimals Number of decimals after comma.
     */
-    function changePreIcoTokenRate(uint256 _preIcoTokenRate, uint256 _negativeDecimals) onlyAdministratorOrOwner public {
-        uint256 dayNumber = now / (1 days);
-        require(dayNumber != lastDayChangePreIcoTokenRate);
+    function changePreIcoTokenRate(uint256 _preIcoTokenRate, uint256 _negativeDecimals) public onlyAdministratorOrOwner {
+        require(now > lastDayChangePreIcoTokenRate + 1 days);
 
         preIcoTokenRate = _preIcoTokenRate;
         preIcoTokenRateNegativeDecimals = _negativeDecimals;
-        lastDayChangePreIcoTokenRate = dayNumber;
+        lastDayChangePreIcoTokenRate = now;
     }
 
     /**
@@ -208,19 +233,18 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     * @param _icoTokenRate ICO rate of the token.
     * @param _negativeDecimals Number of decimals after comma.
     */
-    function changeIcoTokenRate(uint256 _icoTokenRate, uint256 _negativeDecimals) onlyAdministratorOrOwner public {
-        uint256 dayNumber = now / (1 days);
-        require(dayNumber != lastDayChangeIcoTokenRate);
+    function changeIcoTokenRate(uint256 _icoTokenRate, uint256 _negativeDecimals) public onlyAdministratorOrOwner {
+        require(now > lastDayChangeIcoTokenRate + 1 days);
 
         icoTokenRate = _icoTokenRate;
         icoTokenRateNegativeDecimals = _negativeDecimals;
-        lastDayChangeIcoTokenRate = dayNumber;
+        lastDayChangeIcoTokenRate = now;
     }
 
     /**
     * @dev Called by the owner or administrator to pause, triggers stopped state
     */
-    function pause() onlyAdministratorOrOwner whenNotPaused public {
+    function pause() public onlyAdministratorOrOwner whenNotPaused {
         paused = true;
         Pause();
     }
@@ -228,9 +252,201 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     /**
     * @dev Called by the owner or administrator to unpause, returns to normal state
     */
-    function unpause() onlyAdministratorOrOwner whenPaused public {
+    function unpause() public onlyAdministratorOrOwner whenPaused {
         paused = false;
         Unpause();
+    }
+
+    /**
+    * @dev Sell tokens during pre-ICO.
+    * @dev Sell tokens only for whitelisted wallets if crawdsale is not paused.
+    */
+    function sellTokensPreIco()
+    public payable
+    preIcoSalePeriod
+    whenWhitelisted(msg.sender)
+    whenNotPaused
+    minimalInvestment(msg.value)
+    {
+        require(tokensRemainingPreIco > 0);
+        uint256 excessiveFunds = 0;
+        uint256 weiAmount = msg.value;
+        uint256 plannedAmount = weiAmount.add(getPreIcoInvestment(msg.sender));
+
+        if (plannedAmount > MAXIMAL_INVESTMENT) {
+            excessiveFunds = plannedAmount.sub(MAXIMAL_INVESTMENT);
+            weiAmount = weiAmount.sub(excessiveFunds);
+        }
+
+        uint256 tokensAmount = weiAmount.div(preIcoTokenRate).mul(10 ** preIcoTokenRateNegativeDecimals);
+
+        if (tokensRemainingPreIco < tokensAmount) {
+            uint256 tokensDiff = tokensAmount.sub(tokensRemainingPreIco);
+            uint256 excessiveFundsDiff = tokensDiff.mul(preIcoTokenRate).div(10 ** preIcoTokenRateNegativeDecimals);
+            excessiveFunds = excessiveFunds.add(excessiveFundsDiff);
+
+            weiAmount = weiAmount.sub(excessiveFundsDiff);
+            tokensAmount = tokensRemainingPreIco;
+        }
+
+        withdrawalWalletsTransfer(weiAmount);
+
+        transferTokensPreIco(msg.sender, weiAmount, tokensAmount);
+
+        if (excessiveFunds > 0) {
+            msg.sender.transfer(excessiveFunds);
+        }
+    }
+
+    /**
+    * @dev Sell tokens during pre-ICO for BTC.
+    * @dev Only administrator or owner can sell tokens only for whitelisted wallets if crawdsale is not paused.
+    */
+    function sellTokensForBTCPreIco(address _wallet, uint256 _weiAmount)
+    public
+    onlyAdministratorOrOwner
+    preIcoSalePeriod
+    whenWhitelisted(_wallet)
+    whenNotPaused
+    minimalInvestment(_weiAmount)
+    {
+        uint256 tokensAmount = _weiAmount.div(preIcoTokenRate).mul(10 ** preIcoTokenRateNegativeDecimals);
+        require(tokensRemainingPreIco > tokensAmount);
+        transferTokensPreIco(_wallet, _weiAmount, tokensAmount);
+    }
+
+    /**
+    * @dev Sell tokens during ICO.
+    * @dev Sell tokens only for whitelisted wallets if crawdsale is not paused.
+    */
+    function sellTokensIco()
+    public payable
+    icoSalePeriod
+    whenWhitelisted(msg.sender)
+    whenNotPaused
+    minimalInvestment(msg.value)
+    {
+        require(tokensRemainingIco > 0);
+        uint256 excessiveFunds = 0;
+        uint256 weiAmount = msg.value;
+        uint256 plannedAmount = weiAmount.add(getIcoInvestment(msg.sender));
+
+        if (plannedAmount > MAXIMAL_INVESTMENT) {
+            excessiveFunds = plannedAmount.sub(MAXIMAL_INVESTMENT);
+            weiAmount = weiAmount.sub(excessiveFunds);
+        }
+
+        uint256 tokensAmount = weiAmount.div(icoTokenRate).mul(10 ** icoTokenRateNegativeDecimals);
+
+        if (tokensRemainingIco < tokensAmount) {
+            uint256 tokensDiff = tokensAmount.sub(tokensRemainingIco);
+            uint256 excessiveFundsDiff = tokensDiff.mul(icoTokenRate).div(10 ** icoTokenRateNegativeDecimals);
+            excessiveFunds = excessiveFunds.add(excessiveFundsDiff);
+
+            weiAmount = weiAmount.sub(excessiveFundsDiff);
+            tokensAmount = tokensRemainingIco;
+        }
+
+        withdrawalWalletsTransfer(weiAmount);
+
+        transferTokensIco(msg.sender, weiAmount, tokensAmount);
+
+        if (excessiveFunds > 0) {
+            msg.sender.transfer(excessiveFunds);
+        }
+    }
+
+    /**
+    * @dev Sell tokens during ICO for BTC.
+    * @dev Only administrator or owner can sell tokens only for whitelisted wallets if crawdsale is not paused.
+    */
+    function sellTokensForBTCIco(address _wallet, uint256 _weiAmount)
+    public
+    onlyAdministratorOrOwner
+    icoSalePeriod
+    whenWhitelisted(_wallet)
+    whenNotPaused
+    minimalInvestment(_weiAmount)
+    {
+        uint256 tokensAmount = _weiAmount.div(icoTokenRate).mul(10 ** icoTokenRateNegativeDecimals);
+        require(tokensRemainingIco > tokensAmount);
+        transferTokensIco(_wallet, _weiAmount, tokensAmount);
+    }
+
+    /**
+    * @dev Transfer unsold tokens.
+    * @dev Transfer tokens only for administrators or owner and only after ICO period.
+    */
+    function transferUnsoldTokens() public onlyAdministratorOrOwner afterIcoSalePeriod {
+        require(tokensRemainingIco > 0);
+        token.transferFromIco(addressForUnsoldTokens, tokensRemainingIco);
+        tokensRemainingIco = 0;
+    }
+
+    /**
+    * @dev Transfer remaining compaign allocation and bonus tokens.
+    * @dev Transfer tokens only for administrators or owner and only after ICO period.
+    */
+    function transferRemainingCompaignAllocationAndBonusTokens() public onlyAdministratorOrOwner afterIcoSalePeriod {
+        require(compaignAllocationAndBonusRemainingTokens > 0);
+        token.transferFromIco(addressForCampaignAllocation, compaignAllocationAndBonusRemainingTokens);
+        compaignAllocationAndBonusRemainingTokens = 0;
+    }
+
+    /**
+    * @dev Transfer ownership from ICO contract to the owner for token and whitelist contracts.
+    * @dev Transfer ownership only for administrators or owner and only after ICO period.
+    */
+    function transferOwnershipForTokenAndWhitelist() public onlyAdministratorOrOwner afterIcoSalePeriod {
+        require(compaignAllocationAndBonusRemainingTokens == 0 && tokensRemainingIco == 0);
+        token.transferOwnership(owner);
+        whitelist.transferOwnership(owner);
+    }
+
+    /**
+    * @dev Count the pre-ICO investors total.
+    */
+    function getPreIcoInvestorsCount() public view returns(uint256) {
+        return investorsPreIco.length;
+    }
+
+    /**
+    * @dev Get the pre-ICO investor address.
+    * @param _index the index of investor in the array. 
+    */
+    function getPreIcoInvestor(uint256 _index) public view returns(address) {
+        return investorsPreIco[_index];
+    }
+
+    /**
+    * @dev Gets the total amount of investments for pre-ICO investor.
+    * @param _investorPreIco the pre-ICO investor address.
+    */
+    function getPreIcoInvestment(address _investorPreIco) public view returns(uint256) {
+        return investmentsPreIco[_investorPreIco];
+    }
+
+    /**
+    * @dev Count the ICO investors total.
+    */
+    function getIcoInvestorsCount() public view returns(uint256) {
+        return investorsIco.length;
+    }
+
+    /**
+    * @dev Get the ICO investor address.
+    * @param _index the index of investor in the array. 
+    */
+    function getIcoInvestor(uint256 _index) public view returns(address) {
+        return investorsIco[_index];
+    }
+
+    /**
+    * @dev Gets the total amount of investments for ICO investor.
+    * @param _investorIco the ICO investor address.
+    */
+    function getIcoInvestment(address _investorIco) public view returns(uint256) {
+        return investmentsIco[_investorIco];
     }
 
     /**
@@ -248,21 +464,18 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
     }
 
     /**
-    * @dev Fallback function can be used to buy tokens.
+    * @dev Transfer tokens during pre-ICO.
+    * @dev Available within contract only.
     */
-    function() public payable {
-        if (isPreIco()) {
-            sellTokensPreIco();
-        } else if (isIco()) {
-            sellTokensIco();
-        } else {
-            revert();
-        }
-    }
-
     function transferTokensPreIco(address _walletOwner, uint256 _weiAmount, uint256 _tokensAmount) private {
         tokensRemainingPreIco = tokensRemainingPreIco.sub(_tokensAmount);
         tokensRemainingIco = tokensRemainingIco.sub(_tokensAmount);
+
+        tokensSoldPreIco = tokensSoldPreIco.add(_tokensAmount);
+        tokensSoldTotal = tokensSoldTotal.add(_tokensAmount);
+
+        weiRaisedPreIco = weiRaisedPreIco.add(_weiAmount);
+        weiRaisedTotal = weiRaisedTotal.add(_weiAmount);
 
         if (investmentsPreIco[_walletOwner] == 0) {
             investorsPreIco.push(_walletOwner);
@@ -270,84 +483,27 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
         investmentsPreIco[_walletOwner] = investmentsPreIco[_walletOwner].add(_weiAmount);
 
         token.transferFromIco(_walletOwner, _tokensAmount);
-
     }
 
     /**
-    * @dev Sell tokens during pre-ICO.
-    * @dev Sell tokens only for whitelisted wallets if crawdsale is not paused.
-    */
-    function sellTokensPreIco()
-    preIcoSalePeriod
-    whenWhitelisted(msg.sender)
-    whenNotPaused
-    minimalInvestment(msg.value) 
-    public payable 
-    {
-        require(tokensRemainingPreIco > 0);
-        uint256 excessiveFunds = 0;
-        uint256 weiAmount = msg.value;
-
-        if (weiAmount > MAXIMAL_INVESTMENT) {
-            weiAmount = MAXIMAL_INVESTMENT;
-            excessiveFunds = weiAmount.sub(MAXIMAL_INVESTMENT);
-        }
-
-        uint256 tokensAmount = weiAmount.div(preIcoTokenRate).mul(10 ** preIcoTokenRateNegativeDecimals);
-
-        if (tokensRemainingPreIco < tokensAmount) {
-            uint256 tokensDifferent = tokensAmount.sub(tokensRemainingPreIco);
-            excessiveFunds = excessiveFunds.add(tokensDifferent.mul(preIcoTokenRate).div(10 ** preIcoTokenRateNegativeDecimals));
-
-            weiAmount = weiAmount.sub(excessiveFunds);
-            tokensAmount = tokensRemainingPreIco;
-        }
-
-        withdrawalWalletsTransfer(weiAmount);
-
-        if (excessiveFunds > 0) {
-            msg.sender.transfer(excessiveFunds);
-        }
-
-        transferTokensPreIco(msg.sender, weiAmount, tokensAmount);
-    }
-
-    /**
-    * @dev Sell tokens during pre-ICO for BTC.
-    * @dev Only administrator or owner can sell tokens only for whitelisted wallets if crawdsale is not paused.
-    */
-    function sellTokensForBTCPreIco(address _wallet, uint256 _weiAmount)
-    onlyAdministratorOrOwner
-    preIcoSalePeriod
-    whenWhitelisted(_wallet)
-    whenNotPaused
-    minimalInvestment(_weiAmount) 
-    public 
-    {
-        uint256 tokensAmount = _weiAmount.div(preIcoTokenRate).mul(10 ** preIcoTokenRateNegativeDecimals);
-        require(tokensRemainingPreIco > tokensAmount);
-        transferTokensPreIco(_wallet, _weiAmount, tokensAmount);
-    }
-
-    /**
-    * @dev Sell tokens during ICO.
-    * @dev Sell tokens only for whitelisted wallets if crawdsale is not paused.
+    * @dev Transfer tokens during ICO.
+    * @dev Available within contract only.
     */
     function transferTokensIco(address _walletOwner, uint256 _weiAmount, uint256 _tokensAmount) private {
         uint256 bonusTokens = 0;
 
         if (compaignAllocationAndBonusRemainingTokens > 0) {
-            uint bonus = 0;
+            uint256 bonus = 0;
             if (now < icoTenPercentBonusEnded) {
-                bonus = bonus + 10;
+                bonus = bonus.add(10);
             } else if (now < icoFivePercentBonusEnded) {
-                bonus = bonus + 5;
+                bonus = bonus.add(5);
             }
 
             if (_weiAmount >= MINIMAL_TEN_PERCENT_BONUS_BY_VALUE) {
-                bonus = bonus + 10;
+                bonus = bonus.add(10);
             } else if (_weiAmount >= MINIMAL_FIVE_PERCENT_BONUS_BY_VALUE) {
-                bonus = bonus + 5;
+                bonus = bonus.add(5);
             }
 
             bonusTokens = _tokensAmount.mul(bonus).div(100);
@@ -360,97 +516,19 @@ contract MocrowCoinCrowdsale is Whitelistable, Pausable {
 
         tokensRemainingIco = tokensRemainingIco.sub(_tokensAmount);
 
+        tokensSoldIco = tokensSoldIco.add(_tokensAmount);
+        tokensSoldTotal = tokensSoldTotal.add(_tokensAmount);
+
+        weiRaisedIco = weiRaisedIco.add(_weiAmount);
+        weiRaisedTotal = weiRaisedTotal.add(_weiAmount);
+
         uint256 tokensAmountWithBonuses = _tokensAmount.add(bonusTokens);
 
         if (investmentsIco[_walletOwner] == 0) {
             investorsIco.push(_walletOwner);
         }
-
         investmentsIco[_walletOwner] = investmentsIco[_walletOwner].add(_weiAmount);
+
         token.transferFromIco(_walletOwner, tokensAmountWithBonuses);
-    }
-
-    /**
-    * @dev Sell tokens during ICO.
-    * @dev Sell tokens only for whitelisted wallets if crawdsale is not paused.
-    */
-    function sellTokensIco()
-    icoSalePeriod
-    whenWhitelisted(msg.sender)
-    whenNotPaused
-    minimalInvestment(msg.value)
-    public payable 
-    {
-        require(tokensRemainingIco > 0);
-        uint256 excessiveFunds = 0;
-        uint256 weiAmount = msg.value;
-
-        if (weiAmount > MAXIMAL_INVESTMENT) {
-            weiAmount = MAXIMAL_INVESTMENT;
-            excessiveFunds = weiAmount.sub(MAXIMAL_INVESTMENT);
-        }
-
-        uint256 tokensAmount = weiAmount.div(icoTokenRate).mul(10 ** icoTokenRateNegativeDecimals);
-
-        if (tokensRemainingIco < tokensAmount) {
-            uint256 tokensDifferent = tokensAmount.sub(tokensRemainingIco);
-            excessiveFunds = excessiveFunds.add(tokensDifferent.mul(icoTokenRate).div(10 ** icoTokenRateNegativeDecimals));
-
-            weiAmount = weiAmount.sub(excessiveFunds);
-            tokensAmount = tokensRemainingIco;
-        }
-
-        withdrawalWalletsTransfer(weiAmount);
-
-        if (excessiveFunds > 0) {
-            msg.sender.transfer(excessiveFunds);
-        }
-
-        transferTokensIco(msg.sender, weiAmount, tokensAmount);
-    }
-
-    /**
-    * @dev Sell tokens during ICO for BTC.
-    * @dev Only administrator or owner can sell tokens only for whitelisted wallets if crawdsale is not paused.
-    */
-    function sellTokensForBTCIco(address _wallet, uint256 _weiAmount)
-    onlyAdministratorOrOwner
-    icoSalePeriod
-    whenWhitelisted(_wallet)
-    whenNotPaused
-    minimalInvestment(_weiAmount)
-    public 
-    {
-        uint256 tokensAmount = _weiAmount.div(icoTokenRate).mul(10 ** icoTokenRateNegativeDecimals);
-        require(tokensRemainingIco > tokensAmount);
-        transferTokensIco(_wallet, _weiAmount, tokensAmount);
-    }
-
-    /**
-    * @dev Transfer remaining compaign allocation and bonus tokens.
-    * @dev Transfer tokens only for administrators or owner and only after ICO period.
-    */
-    function transferRemainingCompaignAllocationAndBonusTokens() onlyAdministratorOrOwner afterIcoSalePeriod public {
-        require(compaignAllocationAndBonusRemainingTokens > 0);
-        token.transferFromIco(addressForCampaignAllocation, compaignAllocationAndBonusRemainingTokens);
-        compaignAllocationAndBonusRemainingTokens = 0;
-        if (compaignAllocationAndBonusRemainingTokens == 0 && tokensRemainingIco == 0) {
-            token.transferOwnership(owner);
-            whitelist.transferOwnership(owner);
-        }
-    }
-
-    /**
-    * @dev Transfer unsold tokens.
-    * @dev Transfer tokens only for administrators or owner and only after ICO period.
-    */
-    function transferUnsoldTokens() onlyAdministratorOrOwner afterIcoSalePeriod public {
-        require(tokensRemainingIco > 0);
-        token.transferFromIco(addressForUnsoldTokens, tokensRemainingIco);
-        tokensRemainingIco = 0;
-        if (compaignAllocationAndBonusRemainingTokens == 0 && tokensRemainingIco == 0) {
-            token.transferOwnership(owner);
-            whitelist.transferOwnership(owner);
-        }
     }
 }

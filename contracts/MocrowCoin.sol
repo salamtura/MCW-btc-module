@@ -1,10 +1,10 @@
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.19;
 
-import './zeppelin-solidity/contracts/token/StandardToken.sol';
-import './zeppelin-solidity/contracts/token/BurnableToken.sol';
-import './zeppelin-solidity/contracts/lifecycle/Pausable.sol';
+import "./zeppelin-solidity/contracts/token/ERC20/StandardToken.sol";
+import "./zeppelin-solidity/contracts/token/ERC20/BurnableToken.sol";
+import "./zeppelin-solidity/contracts/lifecycle/Pausable.sol";
 
-import './FreezableToken.sol';
+import "./FreezableToken.sol";
 
 
 interface tokenRecipient {
@@ -49,14 +49,20 @@ contract MocrowCoin is StandardToken, BurnableToken, FreezableToken, Pausable {
 
         addressIco = msg.sender;
 
-        totalSupply = TOTAL_SUPPLY_VALUE;
+        totalSupply_ = TOTAL_SUPPLY_VALUE;
 
-        // balances[msg.sender] = TOTAL_SUPPLY_VALUE - RESERVED_TOKENS_FOR_PLATFORM_OPERATIONS - RESERVED_TOKENS_FOR_FOUNDERS - RESERVED_TOKENS_FOR_BOUNTY_PROGRAM;
-        balances[msg.sender] = TOTAL_SUPPLY_VALUE.sub(RESERVED_TOKENS_FOR_PLATFORM_OPERATIONS.add(RESERVED_TOKENS_FOR_FOUNDERS).add(RESERVED_TOKENS_FOR_BOUNTY_PROGRAM));
+        uint256 tokensAmountForSell = TOTAL_SUPPLY_VALUE.sub(RESERVED_TOKENS_FOR_PLATFORM_OPERATIONS.add(RESERVED_TOKENS_FOR_FOUNDERS).add(RESERVED_TOKENS_FOR_BOUNTY_PROGRAM));
+        balances[msg.sender] = tokensAmountForSell;
+        Transfer(address(0), msg.sender, tokensAmountForSell);
 
         balances[_platformOperationsReserve] = RESERVED_TOKENS_FOR_PLATFORM_OPERATIONS;
+        Transfer(address(0), _platformOperationsReserve, RESERVED_TOKENS_FOR_PLATFORM_OPERATIONS);
+
         balances[_foundersReserve] = RESERVED_TOKENS_FOR_FOUNDERS;
+        Transfer(address(0), _foundersReserve, RESERVED_TOKENS_FOR_FOUNDERS);
+
         balances[_bountyProgramReserve] = RESERVED_TOKENS_FOR_BOUNTY_PROGRAM;
+        Transfer(address(0), _bountyProgramReserve, RESERVED_TOKENS_FOR_BOUNTY_PROGRAM);
     }
 
     /**
@@ -65,7 +71,7 @@ contract MocrowCoin is StandardToken, BurnableToken, FreezableToken, Pausable {
     * @param _to The address to transfer to.
     * @param _value The amount to be transferred.
     */
-    function transfer(address _to, uint256 _value) whenNotPaused public returns (bool) {
+    function transfer(address _to, uint256 _value) public whenNotPaused returns (bool) {
         require(!isFrozen(msg.sender));
         super.transfer(_to, _value);
     }
@@ -77,7 +83,7 @@ contract MocrowCoin is StandardToken, BurnableToken, FreezableToken, Pausable {
     * @param _to address The address which you want to transfer to
     * @param _value uint256 the amount of tokens to be transferred
     */
-    function transferFrom(address _from, address _to, uint256 _value) whenNotPaused public returns (bool) {
+    function transferFrom(address _from, address _to, uint256 _value) public whenNotPaused returns (bool) {
         require(!isFrozen(msg.sender));
         require(!isFrozen(_from));
         super.transferFrom(_from, _to, _value);
@@ -88,7 +94,7 @@ contract MocrowCoin is StandardToken, BurnableToken, FreezableToken, Pausable {
     * @param _to The address to transfer to.
     * @param _value The amount to be transferred.
     */
-    function transferFromIco(address _to, uint256 _value) onlyIco public returns (bool) {
+    function transferFromIco(address _to, uint256 _value) public onlyIco returns (bool) {
         super.transfer(_to, _value);
     }
 

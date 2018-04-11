@@ -1,6 +1,6 @@
-pragma solidity ^0.4.15;
+pragma solidity ^0.4.19;
 
-import './zeppelin-solidity/contracts/ownership/Ownable.sol';
+import "./zeppelin-solidity/contracts/ownership/Ownable.sol";
 
 
 interface tokenERC20 { function transferFrom(address from, address to, uint256 value) public returns (bool); }
@@ -12,7 +12,7 @@ contract RecipientContract is Ownable {
 
     function RecipientContract() public { }
 
-    function setForward(address _to) onlyOwner public {
+    function setForward(address _to) public onlyOwner {
         require(_to != address(0));
         forwardTo = _to;
     }
