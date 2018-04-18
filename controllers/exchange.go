@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"math"
 	"math/big"
@@ -101,12 +102,37 @@ func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress str
 		Status:          model.TRANSACTON_STATUS_NEW,
 	}
 
+	if err := controller.UpdateBTCAddress(ethereumAddress, address); err != nil {
+		return nil, false, err
+	}
+
 	err = controller.database.Create(transaction).Error
 
 	return transaction, true, err
 }
 
+func (controller ExchangeController) UpdateBTCAddress(ethereumAddress string, btcAddress string) error {
+	user := new(model.User)
+
+	if err := controller.database.Table("users").Where("eth_addr = ?", ethereumAddress).First(user); err != nil {
+		return errors.New("user not found")
+	}
+
+	user.BtcAddr = btcAddress
+
+	return controller.database.Table("users").Save(user).Error
+}
+
 func (controller *ExchangeController) BuyTokens(transaction *model.BTCTransaction) {
+	startAgain := func() {
+		newTransaction, isNew, err := controller.CreateTransactionEntry(transaction.EthereumAddress)
+		if err != nil || !isNew {
+			return
+		}
+		go controller.BuyTokens(newTransaction)
+	}
+
+	defer startAgain()
 	rate, err := controller.getExchangeRate()
 
 	if err != nil {
