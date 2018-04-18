@@ -114,7 +114,7 @@ func (controller *ExchangeController) CreateTransactionEntry(ethereumAddress str
 func (controller ExchangeController) UpdateBTCAddress(ethereumAddress string, btcAddress string) error {
 	user := new(model.User)
 
-	if err := controller.database.Table("users").Where("eth_addr = ?", ethereumAddress).First(user); err != nil {
+	if err := controller.database.Table("users").Where("eth_addr = ?", ethereumAddress).First(user).Error; err != nil {
 		return errors.New("user not found")
 	}
 
